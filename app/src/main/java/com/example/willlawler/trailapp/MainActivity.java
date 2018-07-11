@@ -14,52 +14,50 @@ import android.widget.Toast;
 import com.esri.arcgisruntime.data.ServiceFeatureTable;
 import com.esri.arcgisruntime.layers.ArcGISTiledLayer;
 import com.esri.arcgisruntime.layers.FeatureLayer;
+import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.mapping.ArcGISMap;
 import com.esri.arcgisruntime.mapping.Basemap;
+import com.esri.arcgisruntime.mapping.Viewpoint;
 import com.esri.arcgisruntime.mapping.view.LocationDisplay;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
 import com.esri.arcgisruntime.portal.PortalItem;
 
-
 public class MainActivity extends AppCompatActivity {
 
     private MapView mMapView;
     private LocationDisplay mLocationDisplay;
+    private FeatureLayer mLayer;
 
+    private void setupMap() {
+
+        ArcGISTiledLayer tiledLayer = new ArcGISTiledLayer("http://maps.six.nsw.gov.au/arcgis/rest/services/public/NSW_Base_Map/MapServer");
+        Basemap basemap = new Basemap(tiledLayer);
+        ArcGISMap map = new ArcGISMap();
+        map.setBasemap(basemap);
+        //mMapView.setMap(map);
+        addLayer(map);
+
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        mMapView = (MapView) findViewById(R.id.mapView);
+        setupMap();
 
-
-        getSupportActionBar().setDisplayShowTitleEnabled(false);
-        /*
-        mMapView = findViewById(R.id.mapView);
-        ArcGISMap map = new ArcGISMap(Basemap.Type.TOPOGRAPHIC, 34.056295, -117.195800, 16);
-        mMapView.setMap(map);
-        */
-        mMapView = findViewById(R.id.mapView);
-        ArcGISTiledLayer tiledLayer = new ArcGISTiledLayer("http://maps.six.nsw.gov.au/arcgis/rest/services/public/NSW_Base_Map/MapServer");
-        Basemap basemap = new Basemap(tiledLayer);
-
-
-        ArcGISMap map = new ArcGISMap();
-        map.setBasemap(basemap);
-        mMapView.setMap(map);
-        addTrailheadsLayer();
         setupLocationDisplay();
     }
 
     @Override
-    protected void onPause(){
-        mMapView.pause();
+    protected void onPause() {
         super.onPause();
+        mMapView.pause();
     }
 
     @Override
-    protected void onResume(){
+    protected void onResume() {
         super.onResume();
         mMapView.resume();
     }
@@ -68,15 +66,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         mMapView.dispose();
-    }
-
-
-    private void addTrailheadsLayer() {
-        String url = "https://services9.arcgis.com/v4xqTIyE0gUuTGM9/arcgis/rest/services/testfeaturelayer/FeatureServer";
-        ServiceFeatureTable serviceFeatureTable = new ServiceFeatureTable(url);
-        FeatureLayer featureLayer = new FeatureLayer(serviceFeatureTable);
-        ArcGISMap map = mMapView.getMap();
-        map.getOperationalLayers().add(featureLayer);
     }
 
     private void setupLocationDisplay() {
@@ -113,5 +102,24 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(MainActivity.this, getResources().getString(R.string.location_permission_denied), Toast.LENGTH_SHORT).show();
         }
     }
+
+    private void addLayer(final ArcGISMap map){
+        Portal portal = new Portal("http://www.arcgis.com");
+        final PortalItem portalItem = new PortalItem(portal, "bcbdeb93c6774b01b3b5bf0f76901df8");
+        mLayer = new FeatureLayer(portalItem,0);
+        mLayer.loadAsync();
+        mLayer.addDoneLoadingListener(new Runnable() {
+            @Override public void run() {
+                if (mLayer.getLoadStatus() == LoadStatus.LOADED) {
+                    Viewpoint viewpoint = new Viewpoint(mLayer.getFullExtent());
+                    map.setInitialViewpoint(viewpoint);
+                    // *** ADD ***
+                    map.getOperationalLayers().add(mLayer);
+                    mMapView.setMap(map);
+                }
+            }
+        });
+    }
+
 
 }
