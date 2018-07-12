@@ -30,14 +30,45 @@ public class MainActivity extends AppCompatActivity {
     private FeatureLayer mLayer;
 
     private void setupMap() {
+        if (mMapView != null) {
+            ArcGISTiledLayer tiledLayer = new ArcGISTiledLayer("http://maps.six.nsw.gov.au/arcgis/rest/services/public/NSW_Base_Map/MapServer");
+            Basemap basemap = new Basemap(tiledLayer);
+            ArcGISMap map = new ArcGISMap();
+            map.setBasemap(basemap);
+            //mMapView.setMap(map);
+            addLayer(map);
+        }
+    }
+/*
+    private void setupMap() {
+        if (mMapView != null) {
+            Basemap.Type basemapType = Basemap.Type.TOPOGRAPHIC;
+            double latitude = -34.025203;
+            double longitude = 151.130664;
+            int levelOfDetail = 11;
+            ArcGISMap map = new ArcGISMap(basemapType, latitude, longitude, levelOfDetail);
 
-        ArcGISTiledLayer tiledLayer = new ArcGISTiledLayer("http://maps.six.nsw.gov.au/arcgis/rest/services/public/NSW_Base_Map/MapServer");
-        Basemap basemap = new Basemap(tiledLayer);
-        ArcGISMap map = new ArcGISMap();
-        map.setBasemap(basemap);
-        //mMapView.setMap(map);
-        addLayer(map);
+            mMapView.setMap(map);
+            addLayer(map);
+        }
+    }
+*/
 
+    private void addLayer(final ArcGISMap map){
+        Portal portal = new Portal("http://www.arcgis.com");
+        final PortalItem portalItem = new PortalItem(portal, "bcbdeb93c6774b01b3b5bf0f76901df8");
+        mLayer = new FeatureLayer(portalItem,0);
+        mLayer.loadAsync();
+        mLayer.addDoneLoadingListener(new Runnable() {
+            @Override public void run() {
+                if (mLayer.getLoadStatus() == LoadStatus.LOADED) {
+                    Viewpoint viewpoint = new Viewpoint(mLayer.getFullExtent());
+                    map.setInitialViewpoint(viewpoint);
+                    map.getOperationalLayers().add(mLayer);
+                    mMapView.setMap(map);
+                }
+            }
+        });
     }
 
     @Override
@@ -46,7 +77,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         mMapView = (MapView) findViewById(R.id.mapView);
         setupMap();
-
         setupLocationDisplay();
     }
 
@@ -91,7 +121,10 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
-        mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.COMPASS_NAVIGATION);
+        mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.OFF);
+        // .COMPASS_NAVIGATION = compas mode
+        // .NAVIGATION = car mode
+        // .OFF = no auto rotation
         mLocationDisplay.startAsync();
     }
     @Override
@@ -103,23 +136,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void addLayer(final ArcGISMap map){
-        Portal portal = new Portal("http://www.arcgis.com");
-        final PortalItem portalItem = new PortalItem(portal, "bcbdeb93c6774b01b3b5bf0f76901df8");
-        mLayer = new FeatureLayer(portalItem,0);
-        mLayer.loadAsync();
-        mLayer.addDoneLoadingListener(new Runnable() {
-            @Override public void run() {
-                if (mLayer.getLoadStatus() == LoadStatus.LOADED) {
-                    Viewpoint viewpoint = new Viewpoint(mLayer.getFullExtent());
-                    map.setInitialViewpoint(viewpoint);
-                    // *** ADD ***
-                    map.getOperationalLayers().add(mLayer);
-                    mMapView.setMap(map);
-                }
-            }
-        });
-    }
+
 
 
 }
