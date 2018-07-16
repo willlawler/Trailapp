@@ -8,10 +8,16 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
+import android.view.MotionEvent;
 import android.view.Window;
 import android.widget.Toast;
 
+import com.esri.arcgisruntime.ArcGISRuntimeException;
+import com.esri.arcgisruntime.concurrent.ListenableFuture;
+import com.esri.arcgisruntime.data.Feature;
+import com.esri.arcgisruntime.data.FeatureEditResult;
 import com.esri.arcgisruntime.data.ServiceFeatureTable;
+import com.esri.arcgisruntime.geometry.Point;
 import com.esri.arcgisruntime.layers.ArcGISTiledLayer;
 import com.esri.arcgisruntime.layers.FeatureLayer;
 import com.esri.arcgisruntime.loadable.LoadStatus;
@@ -22,6 +28,10 @@ import com.esri.arcgisruntime.mapping.view.LocationDisplay;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
 import com.esri.arcgisruntime.portal.PortalItem;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -48,7 +58,14 @@ public class MainActivity extends AppCompatActivity {
         PortalItem mapPortalItem = new PortalItem(portal, "b5adb856bc224c9483ffe10b3aafdbbb");
         //construct a map from the portal item
         ArcGISMap map = new ArcGISMap(mapPortalItem);
-        addLayer(map);
+        //addLayer(map);
+        mMapView.setMap(map);
+        final PortalItem portalItem = new PortalItem(portal, "bcbdeb93c6774b01b3b5bf0f76901df8");
+        mLayer = new FeatureLayer(portalItem,0);
+        map.getOperationalLayers().add(mLayer);
+
+        // Create a feature table from a feature service i.e. add the layer that we are going to edit. this is teh same as the previous layer adding.
+        ServiceFeatureTable serviceFeatureTable = new ServiceFeatureTable("https://bob-jane.maps.arcgis.com/home/item.html?id=b5adb856bc224c9483ffe10b3aafdbbb");
 
     }
 
@@ -61,25 +78,11 @@ public class MainActivity extends AppCompatActivity {
         setupMap();
 
         setupLocationDisplay();
+
+
     }
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        mMapView.pause();
-    }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        mMapView.resume();
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        mMapView.dispose();
-    }
 
     private void setupLocationDisplay() {
         mLocationDisplay = mMapView.getLocationDisplay();
@@ -105,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.OFF);
-        // .COMPASS_NAVIGATION = compas mode
+        // .COMPASS_NAVIGATION = compass mode
         // .NAVIGATION = car mode
         // .OFF = no auto rotation
         mLocationDisplay.startAsync();
@@ -119,23 +122,40 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void addLayer(final ArcGISMap map){
-        Portal portal = new Portal("http://www.arcgis.com");
-        final PortalItem portalItem = new PortalItem(portal, "bcbdeb93c6774b01b3b5bf0f76901df8");
-        mLayer = new FeatureLayer(portalItem,0);
-        mLayer.loadAsync();
-        mLayer.addDoneLoadingListener(new Runnable() {
-            @Override public void run() {
-                if (mLayer.getLoadStatus() == LoadStatus.LOADED) {
-                    Viewpoint viewpoint = new Viewpoint(mLayer.getFullExtent());
-                    map.setInitialViewpoint(viewpoint);
-                    // *** ADD ***
-                    map.getOperationalLayers().add(mLayer);
-                    mMapView.setMap(map);
-                }
-            }
-        });
+    @Override
+    public boolean onSingleTapConfirmed(MotionEvent e) {
+        // create a screen point from the mouse event
+        android.graphics.Point screenPoint = new android.graphics.Point((int)e.getX(), (int)e.getY());
+
+        // convert this to a map point
+        Point mapPoint = mMapView.screenToLocation(screenPoint);
+
+        // add a feature at this point
+        addFeature(mapPoint);
+
+        return true;
     }
 
+    private void addFeature(Point mapPoint) {
+    }
+
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mMapView.pause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        mMapView.resume();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mMapView.dispose();
+    }
 
 }
