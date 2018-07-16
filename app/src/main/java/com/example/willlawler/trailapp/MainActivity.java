@@ -1,6 +1,7 @@
 package com.example.willlawler.trailapp;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -8,6 +9,7 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.Window;
 import android.widget.Toast;
@@ -16,28 +18,40 @@ import com.esri.arcgisruntime.ArcGISRuntimeException;
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.data.Feature;
 import com.esri.arcgisruntime.data.FeatureEditResult;
+import com.esri.arcgisruntime.data.FeatureQueryResult;
+import com.esri.arcgisruntime.data.QueryParameters;
 import com.esri.arcgisruntime.data.ServiceFeatureTable;
+import com.esri.arcgisruntime.geometry.Envelope;
+import com.esri.arcgisruntime.geometry.GeometryType;
 import com.esri.arcgisruntime.geometry.Point;
 import com.esri.arcgisruntime.layers.ArcGISTiledLayer;
 import com.esri.arcgisruntime.layers.FeatureLayer;
+import com.esri.arcgisruntime.layers.Layer;
 import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.mapping.ArcGISMap;
 import com.esri.arcgisruntime.mapping.Basemap;
 import com.esri.arcgisruntime.mapping.Viewpoint;
+import com.esri.arcgisruntime.mapping.popup.PopupAttachment;
 import com.esri.arcgisruntime.mapping.view.LocationDisplay;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
 import com.esri.arcgisruntime.portal.PortalItem;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import com.esri.arcgisruntime.mapping.view.DefaultMapViewOnTouchListener;
 
 public class MainActivity extends AppCompatActivity {
 
     private MapView mMapView;
     private LocationDisplay mLocationDisplay;
     private FeatureLayer mLayer;
+
+    private List<Feature> mSelectedFeatures;
+    private EditState mCurrentEditState;
+
 
     private void setupMap() {
 
@@ -64,25 +78,87 @@ public class MainActivity extends AppCompatActivity {
         mLayer = new FeatureLayer(portalItem,0);
         map.getOperationalLayers().add(mLayer);
 
-        // Create a feature table from a feature service i.e. add the layer that we are going to edit. this is teh same as the previous layer adding.
-        ServiceFeatureTable serviceFeatureTable = new ServiceFeatureTable("https://bob-jane.maps.arcgis.com/home/item.html?id=b5adb856bc224c9483ffe10b3aafdbbb");
 
     }
 
 
+
+
+
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         mMapView = (MapView) findViewById(R.id.mapView);
         setupMap();
-
         setupLocationDisplay();
 
 
+
+
+        // add listener to handle motion events, which only responds once a geodatabase is loaded
+        mMapView.setOnTouchListener(
+                new DefaultMapViewOnTouchListener(MainActivity.this, mMapView) {
+                    @Override
+                    public boolean onSingleTapConfirmed(MotionEvent motionEvent) {
+                        selectFeaturesAt(mapPointFrom(motionEvent), 10);
+
+                        return true;
+                    }
+                }
+        );
     }
 
+    private Point mapPointFrom(MotionEvent motionEvent) {
+        // get the screen point
+        android.graphics.Point screenPoint = new android.graphics.Point(Math.round(motionEvent.getX()),
+                Math.round(motionEvent.getY()));
+        // return the point that was clicked in map coordinates
+        return mMapView.screenToLocation(screenPoint);
+    }
 
+    private void selectFeaturesAt(Point point, int tolerance) {
+        // define the tolerance for identifying the feature
+        final double mapTolerance = tolerance * mMapView.getUnitsPerDensityIndependentPixel();
+        // create objects required to do a selection with a query
+        Envelope envelope = new Envelope(point.getX() - mapTolerance, point.getY() - mapTolerance,
+                point.getX() + mapTolerance, point.getY() + mapTolerance, mMapView.getSpatialReference());
+        QueryParameters query = new QueryParameters();
+        query.setGeometry(envelope);
+        mSelectedFeatures = new ArrayList<>();
+        // select features within the envelope for all features on the map
+        for (Layer layer : mMapView.getMap().getOperationalLayers()) {
+            final FeatureLayer featureLayer = (FeatureLayer) layer;
+            final ListenableFuture<FeatureQueryResult> featureQueryResultFuture = featureLayer
+                    .selectFeaturesAsync(query, FeatureLayer.SelectionMode.NEW);
+            // add done loading listener to fire when the selection returns
+            featureQueryResultFuture.addDoneListener(new Runnable() {
+                @Override
+                public void run() {
+                    // Get the selected features
+                    final ListenableFuture<FeatureQueryResult> featureQueryResultFuture = featureLayer.getSelectedFeaturesAsync();
+                    featureQueryResultFuture.addDoneListener(new Runnable() {
+                        @Override public void run() {
+                            try {
+                                FeatureQueryResult layerFeatures = featureQueryResultFuture.get();
+                                for (Feature feature : layerFeatures) {
+                                    // Only select points for editing
+                                    if (feature.getGeometry().getGeometryType() == GeometryType.POINT) {
+                                        mSelectedFeatures.add(feature);
+                                    }
+                                }
+                            } catch (Exception e) {
+                                Log.e(getResources().getString(R.string.app_name), "Select feature failed: " + e.getMessage());
+                            }
+                        }
+                    });
+                    // set current edit state to editing
+                    mCurrentEditState = EditState.Editing;
+                }
+            });
+        }
+    }
 
     private void setupLocationDisplay() {
         mLocationDisplay = mMapView.getLocationDisplay();
@@ -122,22 +198,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    public boolean onSingleTapConfirmed(MotionEvent e) {
-        // create a screen point from the mouse event
-        android.graphics.Point screenPoint = new android.graphics.Point((int)e.getX(), (int)e.getY());
-
-        // convert this to a map point
-        Point mapPoint = mMapView.screenToLocation(screenPoint);
-
-        // add a feature at this point
-        addFeature(mapPoint);
-
-        return true;
-    }
-
-    private void addFeature(Point mapPoint) {
-    }
 
 
     @Override
@@ -156,6 +216,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         mMapView.dispose();
+    }
+
+    public enum EditState {
+        NotReady, // Geodatabase has not yet been generated
+        Editing, // A feature is in the process of being moved
+        Ready // The geodatabase is ready for synchronization or further edits
     }
 
 }
