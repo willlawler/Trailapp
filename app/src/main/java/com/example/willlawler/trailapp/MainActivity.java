@@ -31,14 +31,27 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupMap() {
 
+        /*
         ArcGISTiledLayer tiledLayer = new ArcGISTiledLayer("http://maps.six.nsw.gov.au/arcgis/rest/services/public/NSW_Base_Map/MapServer");
         Basemap basemap = new Basemap(tiledLayer);
         ArcGISMap map = new ArcGISMap();
         map.setBasemap(basemap);
-        //mMapView.setMap(map);
+
+        ArcGISMap map = new ArcGISMap("https://bob-jane.maps.arcgis.com/home/item.html?id=b74c3e1f7f344b7099df9f9d78fcc273");
+        mMapView.setMap(map);
+
+ */
+
+        //construct the portal from the URL of the portal
+        Portal portal = new Portal("http://www.arcgis.com");
+        //construct a portal item from the portal and item ID string
+        PortalItem mapPortalItem = new PortalItem(portal, "b5adb856bc224c9483ffe10b3aafdbbb");
+        //construct a map from the portal item
+        ArcGISMap map = new ArcGISMap(mapPortalItem);
         addLayer(map);
 
     }
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -91,7 +104,10 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
-        mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.COMPASS_NAVIGATION);
+        mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.OFF);
+        // .COMPASS_NAVIGATION = compas mode
+        // .NAVIGATION = car mode
+        // .OFF = no auto rotation
         mLocationDisplay.startAsync();
     }
     @Override
