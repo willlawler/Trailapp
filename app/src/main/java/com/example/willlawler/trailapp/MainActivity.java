@@ -12,6 +12,7 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.Window;
 import android.widget.Toast;
@@ -54,6 +55,8 @@ public class MainActivity extends AppCompatActivity {
     private List<Feature> mSelectedFeatures;
     private EditState mCurrentEditState;
 
+    private ArcGISMap map;
+
 
     private void setupMap() {
 
@@ -73,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
         //construct a portal item from the portal and item ID string
         PortalItem mapPortalItem = new PortalItem(portal, "b5adb856bc224c9483ffe10b3aafdbbb");
         //construct a map from the portal item
-        ArcGISMap map = new ArcGISMap(mapPortalItem);
+        map = new ArcGISMap(mapPortalItem);
         //addLayer(map);
         mMapView.setMap(map);
         final PortalItem portalItem = new PortalItem(portal, "bcbdeb93c6774b01b3b5bf0f76901df8");
@@ -88,6 +91,28 @@ public class MainActivity extends AppCompatActivity {
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.menu_bar, menu);
         return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle item selection
+        switch (item.getItemId()) {
+            case R.id.toggleLayer:
+                removeWaterLayer();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+    public void removeWaterLayer(){
+        if (map.getOperationalLayers().contains(mLayer)){
+            map.getOperationalLayers().remove(mLayer);
+        }
+        else {
+            map.getOperationalLayers().add(mLayer);
+        }
+
     }
 
 
