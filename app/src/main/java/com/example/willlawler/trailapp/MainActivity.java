@@ -64,7 +64,9 @@ public class MainActivity extends AppCompatActivity {
         mLayer = new FeatureLayer(portalItem,0);
         map.getOperationalLayers().add(mLayer);
 
-       
+        // Create a feature table from a feature service i.e. add the layer that we are going to edit. this is teh same as the previous layer adding.
+        ServiceFeatureTable serviceFeatureTable = new ServiceFeatureTable("https://bob-jane.maps.arcgis.com/home/item.html?id=b5adb856bc224c9483ffe10b3aafdbbb");
+
     }
 
 
@@ -74,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         mMapView = (MapView) findViewById(R.id.mapView);
         setupMap();
+
         setupLocationDisplay();
 
 
@@ -119,6 +122,22 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public boolean onSingleTapConfirmed(MotionEvent e) {
+        // create a screen point from the mouse event
+        android.graphics.Point screenPoint = new android.graphics.Point((int)e.getX(), (int)e.getY());
+
+        // convert this to a map point
+        Point mapPoint = mMapView.screenToLocation(screenPoint);
+
+        // add a feature at this point
+        addFeature(mapPoint);
+
+        return true;
+    }
+
+    private void addFeature(Point mapPoint) {
+    }
 
 
     @Override
