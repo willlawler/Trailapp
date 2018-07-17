@@ -2,48 +2,46 @@ package com.example.willlawler.trailapp;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.media.MediaActionSound;
+import android.os.AsyncTask;
+import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
-import android.view.Window;
 import android.widget.Toast;
 
-import com.esri.arcgisruntime.ArcGISRuntimeException;
 import com.esri.arcgisruntime.concurrent.ListenableFuture;
 import com.esri.arcgisruntime.data.Feature;
-import com.esri.arcgisruntime.data.FeatureEditResult;
 import com.esri.arcgisruntime.data.FeatureQueryResult;
 import com.esri.arcgisruntime.data.QueryParameters;
-import com.esri.arcgisruntime.data.ServiceFeatureTable;
 import com.esri.arcgisruntime.geometry.Envelope;
 import com.esri.arcgisruntime.geometry.GeometryType;
 import com.esri.arcgisruntime.geometry.Point;
-import com.esri.arcgisruntime.layers.ArcGISTiledLayer;
 import com.esri.arcgisruntime.layers.FeatureLayer;
 import com.esri.arcgisruntime.layers.Layer;
-import com.esri.arcgisruntime.loadable.LoadStatus;
 import com.esri.arcgisruntime.mapping.ArcGISMap;
-import com.esri.arcgisruntime.mapping.Basemap;
-import com.esri.arcgisruntime.mapping.Viewpoint;
-import com.esri.arcgisruntime.mapping.popup.PopupAttachment;
 import com.esri.arcgisruntime.mapping.view.LocationDisplay;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.portal.Portal;
 import com.esri.arcgisruntime.portal.PortalItem;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
+
 import com.esri.arcgisruntime.mapping.view.DefaultMapViewOnTouchListener;
 
 public class MainActivity extends AppCompatActivity {
@@ -54,6 +52,8 @@ public class MainActivity extends AppCompatActivity {
 
     private List<Feature> mSelectedFeatures;
     private EditState mCurrentEditState;
+    private final String[] permission = new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE };
+    private final int requestCode = 2;
 
     private ArcGISMap map;
 
@@ -66,10 +66,7 @@ public class MainActivity extends AppCompatActivity {
         ArcGISMap map = new ArcGISMap();
         map.setBasemap(basemap);
 
-        ArcGISMap map = new ArcGISMap("https://bob-jane.maps.arcgis.com/home/item.html?id=b74c3e1f7f344b7099df9f9d78fcc273");
-        mMapView.setMap(map);
-
- */
+        */
 
         //construct the portal from the URL of the portal
         Portal portal = new Portal("http://www.arcgis.com");
@@ -98,14 +95,29 @@ public class MainActivity extends AppCompatActivity {
         // Handle item selection
         switch (item.getItemId()) {
             case R.id.toggleLayer:
-                removeWaterLayer();
+                toggleWaterLayer();
                 return true;
+            case R.id.recenter:
+                mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.RECENTER);
+                return true;
+            case R.id.screenshot:
+                captureScreenshotAsync();
+                // Check permissions to see if failure may be due to lack of permissions.
+                boolean permissionCheck = ContextCompat.checkSelfPermission(MainActivity.this, permission[0]) ==
+                        PackageManager.PERMISSION_GRANTED;
+
+                if (!permissionCheck) {
+                    // If permissions are not already granted, request permission from the user.
+                    ActivityCompat.requestPermissions(MainActivity.this, permission, requestCode);
+                } else {
+                    captureScreenshotAsync();
+                }
             default:
                 return super.onOptionsItemSelected(item);
         }
     }
 
-    public void removeWaterLayer(){
+    public void toggleWaterLayer(){
         if (map.getOperationalLayers().contains(mLayer)){
             map.getOperationalLayers().remove(mLayer);
         }
@@ -222,6 +234,7 @@ public class MainActivity extends AppCompatActivity {
         // .OFF = no auto rotation
         mLocationDisplay.startAsync();
     }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -257,4 +270,131 @@ public class MainActivity extends AppCompatActivity {
         Ready // The geodatabase is ready for synchronization or further edits
     }
 
-}
+
+
+
+
+
+
+    /**
+     * capture the map as an image
+     */
+    private void captureScreenshotAsync() {
+
+        // export the image from the mMapView
+        final ListenableFuture<Bitmap> export = mMapView.exportImageAsync();
+        export.addDoneListener(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Bitmap currentMapImage = export.get();
+                    // play the camera shutter sound
+                    MediaActionSound sound = new MediaActionSound();
+                    sound.play(MediaActionSound.SHUTTER_CLICK);
+                    // save the exported bitmap to an image file
+                    SaveImageTask saveImageTask = new SaveImageTask();
+                    saveImageTask.execute(currentMapImage);
+                } catch (Exception e) {
+                    Toast
+                            .makeText(getApplicationContext(), "export failed" + e.getMessage(),
+                                    Toast.LENGTH_SHORT).show();
+
+                }
+            }
+        });
+    }
+
+
+    private File saveToFile(Bitmap bitmap) throws IOException {
+
+        // create a directory ArcGIS to save the file
+        File root;
+        File file = null;
+        String fileName = "map-export-image" + System.currentTimeMillis() + ".png";
+        root = Environment.getExternalStorageDirectory();
+        File fileDir = new File(root.getAbsolutePath() + "/ArcGIS Export/");
+        boolean isDirectoryCreated = fileDir.exists();
+        if (!isDirectoryCreated) {
+            isDirectoryCreated = fileDir.mkdirs();
+        }
+        if (isDirectoryCreated) {
+            file = new File(fileDir, fileName);
+            // write the bitmap to PNG file
+            FileOutputStream fos = new FileOutputStream(file);
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+
+            // close the stream
+            fos.flush();
+            fos.close();
+        }
+        return file;
+
+    }
+    /*
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        // If request is cancelled, the result arrays are empty.
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            // Location permission was granted. This would have been triggered in response to failing to start the
+            // LocationDisplay, so try starting this again.
+            captureScreenshotAsync();
+        } else {
+            // If permission was denied, show toast to inform user what was chosen. If LocationDisplay is started again,
+            // request permission UX will be shown again, option should be shown to allow never showing the UX again.
+            // Alternative would be to disable functionality so request is not shown again.
+            Toast.makeText(MainActivity.this, "Storage permission denied", Toast
+                .LENGTH_SHORT).show();
+
+    }
+    }
+    */
+
+            /**
+     * AsyncTask class to save the bitmap as an image
+     */
+    private class SaveImageTask extends AsyncTask<Bitmap, Void, File> {
+
+        @Override
+        protected void onPreExecute() {
+            // display a toast message to inform saving the map as an image
+            Toast.makeText(getApplicationContext(), "Map saved as picture", Toast.LENGTH_SHORT)
+                    .show();
+        }
+
+        /**
+         * save the file using a worker thread
+         */
+        @Override
+        protected File doInBackground(Bitmap... mapBitmap) {
+
+            try {
+                return saveToFile(mapBitmap[0]);
+            } catch (Exception e) {
+                Log.e("export:", "Export failed" + e.getMessage());
+            }
+
+            return null;
+
+        }
+
+        /**
+         * Perform the work on UI thread to open the exported map image
+         */
+        @Override
+        protected void onPostExecute(File file) {
+            // Open the file to view
+            Intent i = new Intent();
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            i.setAction(Intent.ACTION_VIEW);
+            i.setDataAndType(
+                    FileProvider.getUriForFile(MainActivity.this, getApplicationContext().getPackageName() + ".provider", file),
+                    "image/png");
+            startActivity(i);
+        }
+    }
+
+        public static class ScreenshotFileProvider extends FileProvider {}
+    }
+
+
+
